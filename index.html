@@ -1,0 +1,53 @@
+import { ALL_TILES, Tile, TileCounts, countsToTiles, tileIndex, tilesToCounts } from "./tiles";
+import { countsKey, isWinningCounts, targetWinningSize } from "./hand";
+
+const memo = new Map<string, number>();
+
+export function minAdditionalTilesToWin(tiles: Tile[], targetMelds: number): number {
+  return minAdditionalCountsToWin(tilesToCounts(tiles), targetMelds);
+}
+
+export function calcShanten(tiles: Tile[], targetMelds: number): number {
+  const distance = minAdditionalTilesToWin(tiles, targetMelds);
+  return distance === Number.POSITIVE_INFINITY ? distance : distance - 1;
+}
+
+export function minAdditionalCountsToWin(counts: TileCounts, targetMelds: number): number {
+  const currentSize = counts.reduce((sum, count) => sum + count, 0);
+  const targetSize = targetWinningSize(targetMelds);
+  if (currentSize > targetSize) return Number.POSITIVE_INFINITY;
+
+  const key = `${targetMelds}:${countsKey(counts)}`;
+  const cached = memo.get(key);
+  if (cached !== undefined) return cached;
+
+  if (isWinningCounts(counts, targetMelds)) {
+    memo.set(key, 0);
+    return 0;
+  }
+
+  if (currentSize === targetSize) {
+    memo.set(key, Number.POSITIVE_INFINITY);
+    return Number.POSITIVE_INFINITY;
+  }
+
+  let best = Number.POSITIVE_INFINITY;
+  for (const tile of ALL_TILES) {
+    const index = tileIndex(tile);
+    if (counts[index] >= 4) continue;
+    const next = [...counts];
+    next[index] += 1;
+    best = Math.min(best, 1 + minAdditionalCountsToWin(next, targetMelds));
+  }
+
+  memo.set(key, best);
+  return best;
+}
+
+export function isReadyHand(tiles: Tile[], targetMelds: number): boolean {
+  return calcShanten(tiles, targetMelds) === 0;
+}
+
+export function debugShantenShape(tiles: Tile[], targetMelds: number): string {
+  return `${countsToTiles(tilesToCounts(tiles)).join(" ")}: ${calcShanten(tiles, targetMelds)}シャンテン`;
+}

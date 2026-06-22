@@ -1,0 +1,140 @@
+import {
+  ALL_TILES,
+  Tile,
+  TileCounts,
+  compareTiles,
+  emptyCounts,
+  indexToTile,
+  tileIndex,
+  tilesToCounts
+} from "./tiles";
+
+export type Difficulty = "beginner" | "intermediate" | "advanced" | "expert";
+
+export type DifficultyConfig = {
+  id: Difficulty;
+  label: string;
+  drawQuizSize: number;
+  discardQuizSize: number;
+  targetMelds: number;
+  enabled: boolean;
+};
+
+export const DIFFICULTIES: DifficultyConfig[] = [
+  { id: "beginner", label: "初級", drawQuizSize: 4, discardQuizSize: 5, targetMelds: 1, enabled: true },
+  { id: "intermediate", label: "中級", drawQuizSize: 7, discardQuizSize: 8, targetMelds: 2, enabled: true },
+  { id: "advanced", label: "上級", drawQuizSize: 10, discardQuizSize: 11, targetMelds: 3, enabled: true },
+  { id: "expert", label: "実戦", drawQuizSize: 13, discardQuizSize: 14, targetMelds: 4, enabled: true }
+];
+
+export function getDifficulty(id: Difficulty): DifficultyConfig {
+  return DIFFICULTIES.find((difficulty) => difficulty.id === id) ?? DIFFICULTIES[0];
+}
+
+export function targetWinningSize(targetMelds: number): number {
+  return targetMelds * 3 + 2;
+}
+
+export function removeTile(tiles: Tile[], tile: Tile): Tile[] {
+  const index = tiles.indexOf(tile);
+  if (index < 0) {
+    throw new Error(`手牌にありません: ${tile}`);
+  }
+  return [...tiles.slice(0, index), ...tiles.slice(index + 1)].sort(compareTiles);
+}
+
+export function addTile(tiles: Tile[], tile: Tile): Tile[] {
+  return [...tiles, tile].sort(compareTiles);
+}
+
+export function uniqueTiles(tiles: Tile[]): Tile[] {
+  return Array.from(new Set(tiles)).sort(compareTiles);
+}
+
+export function isWinningHand(tiles: Tile[], targetMelds?: number): boolean {
+  const inferredMelds = (tiles.length - 2) / 3;
+  if (!Number.isInteger(inferredMelds) || inferredMelds < 0) {
+    return false;
+  }
+  return isWinningCounts(tilesToCounts(tiles), targetMelds ?? inferredMelds);
+}
+
+export function isWinningCounts(counts: TileCounts, targetMelds: number): boolean {
+  if (counts.reduce((sum, count) => sum + count, 0) !== targetWinningSize(targetMelds)) {
+    return false;
+  }
+
+  for (let i = 0; i < counts.length; i += 1) {
+    if (counts[i] >= 2) {
+      const next = [...counts];
+      next[i] -= 2;
+      if (canRemoveMelds(next, targetMelds)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function canRemoveMelds(counts: TileCounts, meldsLeft: number): boolean {
+  if (meldsLeft === 0) {
+    return counts.every((count) => count === 0);
+  }
+
+  const first = counts.findIndex((count) => count > 0);
+  if (first < 0) {
+    return false;
+  }
+
+  if (counts[first] >= 3) {
+    const triplet = [...counts];
+    triplet[first] -= 3;
+    if (canRemoveMelds(triplet, meldsLeft - 1)) {
+      return true;
+    }
+  }
+
+  const suitStart = Math.floor(first / 9) * 9;
+  const rank = first - suitStart;
+  if (rank <= 6 && counts[first + 1] > 0 && counts[first + 2] > 0) {
+    const sequence = [...counts];
+    sequence[first] -= 1;
+    sequence[first + 1] -= 1;
+    sequence[first + 2] -= 1;
+    if (canRemoveMelds(sequence, meldsLeft - 1)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function generateRandomHand(size: number, random = Math.random): Tile[] {
+  const wall = ALL_TILES.flatMap((tile) => Array.from({ length: 4 }, () => tile));
+  for (let i = wall.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [wall[i], wall[j]] = [wall[j], wall[i]];
+  }
+  return wall.slice(0, size).sort(compareTiles);
+}
+
+export function countsKey(counts: TileCounts): string {
+  return counts.join("");
+}
+
+export function visibleRemainingCounts(visibleTiles: Tile[]): TileCounts {
+  const visible = tilesToCounts(visibleTiles);
+  const remaining = emptyCounts();
+  for (let i = 0; i < remaining.length; i += 1) {
+    remaining[i] = 4 - visible[i];
+  }
+  return remaining;
+}
+
+export function describeImprovement(discard: Tile, effectiveTiles: Tile[], count: number): string {
+  if (effectiveTiles.length === 0) {
+    return `${discard}を切ると、次に形が前進する牌がありません。`;
+  }
+  const names = effectiveTiles.map((tile) => indexToTile(tileIndex(tile))).join("・");
+  return `${discard}切りは ${names} の${effectiveTiles.length}種類を受けられ、残り枚数ベースで${count}枚あります。受け入れ枚数が最も広い打牌を正解にしています。`;
+}

@@ -1,0 +1,95 @@
+export const SUITS = ["m", "p", "s"] as const;
+export type Suit = (typeof SUITS)[number];
+export type Tile = `${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}${Suit}`;
+
+// TODO: 字牌を追加するときは honors.ts を作り、数牌の順子判定と責務を分ける。
+export const ALL_TILES: Tile[] = SUITS.flatMap((suit) =>
+  Array.from({ length: 9 }, (_, i) => `${i + 1}${suit}` as Tile)
+);
+
+export type TileCounts = number[];
+
+export function tileIndex(tile: Tile): number {
+  const suitOffset = SUITS.indexOf(tile[1] as Suit) * 9;
+  return suitOffset + Number(tile[0]) - 1;
+}
+
+export function indexToTile(index: number): Tile {
+  const suit = SUITS[Math.floor(index / 9)];
+  const rank = (index % 9) + 1;
+  return `${rank}${suit}` as Tile;
+}
+
+export function emptyCounts(): TileCounts {
+  return Array(ALL_TILES.length).fill(0);
+}
+
+export function tilesToCounts(tiles: Tile[]): TileCounts {
+  const counts = emptyCounts();
+  for (const tile of tiles) {
+    const index = tileIndex(tile);
+    counts[index] += 1;
+    if (counts[index] > 4) {
+      throw new Error(`同じ牌は4枚までです: ${tile}`);
+    }
+  }
+  return counts;
+}
+
+export function countsToTiles(counts: TileCounts): Tile[] {
+  return counts.flatMap((count, index) =>
+    Array.from({ length: count }, () => indexToTile(index))
+  );
+}
+
+export function parseTiles(input: string): Tile[] {
+  const tiles: Tile[] = [];
+  let digits = "";
+
+  for (const char of input.replace(/\s/g, "")) {
+    if (/^[1-9]$/.test(char)) {
+      digits += char;
+      continue;
+    }
+
+    if (!SUITS.includes(char as Suit) || digits.length === 0) {
+      throw new Error(`牌表記が不正です: ${input}`);
+    }
+
+    for (const digit of digits) {
+      tiles.push(`${digit}${char}` as Tile);
+    }
+    digits = "";
+  }
+
+  if (digits.length > 0) {
+    throw new Error(`末尾に種類がありません: ${input}`);
+  }
+
+  tilesToCounts(tiles);
+  return tiles.sort(compareTiles);
+}
+
+export function compareTiles(a: Tile, b: Tile): number {
+  return tileIndex(a) - tileIndex(b);
+}
+
+export function formatTiles(tiles: Tile[]): string {
+  return [...tiles].sort(compareTiles).join(" ");
+}
+
+export function makeWall(excluded: Tile[] = []): Tile[] {
+  const counts = tilesToCounts(excluded);
+  return ALL_TILES.flatMap((tile) =>
+    Array.from({ length: 4 - counts[tileIndex(tile)] }, () => tile)
+  );
+}
+
+export function shuffle<T>(items: T[], random = Math.random): T[] {
+  const next = [...items];
+  for (let i = next.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [next[i], next[j]] = [next[j], next[i]];
+  }
+  return next;
+}

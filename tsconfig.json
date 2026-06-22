@@ -1,0 +1,77 @@
+import { describe, expect, it } from "vitest";
+import { DIFFICULTIES, isWinningHand } from "../src/lib/mahjong/hand";
+import { calcShanten, minAdditionalTilesToWin } from "../src/lib/mahjong/shanten";
+import { analyzeEffectiveDraws, analyzeHand, calculateUkeireForDiscard } from "../src/lib/mahjong/ukeire";
+import { parseTiles } from "../src/lib/mahjong/tiles";
+
+describe("tiles", () => {
+  it("parses compact suited tile notation", () => {
+    expect(parseTiles("123m44p9s")).toEqual(["1m", "2m", "3m", "4p", "4p", "9s"]);
+  });
+
+  it("rejects five copies of the same tile", () => {
+    expect(() => parseTiles("11111m")).toThrow("4枚");
+  });
+});
+
+describe("difficulty sizes", () => {
+  it("keeps draw quizzes and discard quizzes as 3n+1 and 3n+2", () => {
+    expect(DIFFICULTIES.map((item) => item.drawQuizSize)).toEqual([4, 7, 10, 13]);
+    expect(DIFFICULTIES.map((item) => item.discardQuizSize)).toEqual([5, 8, 11, 14]);
+  });
+});
+
+describe("winning hand", () => {
+  it("detects one pair and one sequence", () => {
+    expect(isWinningHand(parseTiles("123m11p"), 1)).toBe(true);
+  });
+
+  it("detects one pair and two melds", () => {
+    expect(isWinningHand(parseTiles("123m456p77s"), 2)).toBe(true);
+  });
+
+  it("rejects incomplete shapes", () => {
+    expect(isWinningHand(parseTiles("123m17p"), 1)).toBe(false);
+  });
+});
+
+describe("shanten", () => {
+  it("returns -1 for completed reduced hand", () => {
+    expect(calcShanten(parseTiles("123m11p"), 1)).toBe(-1);
+  });
+
+  it("returns 0 for a four-tile ready hand", () => {
+    expect(calcShanten(parseTiles("123m1p"), 1)).toBe(0);
+    expect(minAdditionalTilesToWin(parseTiles("123m1p"), 1)).toBe(1);
+  });
+
+  it("supports seven-tile training hands toward two melds and a pair", () => {
+    expect(calcShanten(parseTiles("123m456p7s"), 2)).toBe(0);
+  });
+});
+
+describe("ukeire", () => {
+  it("calculates effective draw tiles for a 3n+1 hand", () => {
+    const analysis = analyzeEffectiveDraws(parseTiles("123m1p"), 1);
+    expect(analysis.effectiveTiles).toEqual(["1p"]);
+    expect(analysis.typeCount).toBe(1);
+    expect(analysis.totalCount).toBe(3);
+  });
+
+  it("calculates effective tile types and remaining counts for a discard from 3n+2", () => {
+    const hand = parseTiles("123m12p");
+    const result = calculateUkeireForDiscard(hand, "2p", 1);
+    expect(result.effectiveTiles).toEqual(["1p"]);
+    expect(result.typeCount).toBe(1);
+    expect(result.totalCount).toBe(3);
+  });
+
+  it("compares every unique discard and picks the widest acceptance", () => {
+    const hand = parseTiles("123m45p");
+    const analysis = analyzeHand(hand, 1);
+    expect(analysis.results).toHaveLength(5);
+    expect(analysis.bestResult.totalCount).toBe(
+      Math.max(...analysis.results.map((result) => result.totalCount))
+    );
+  });
+});
